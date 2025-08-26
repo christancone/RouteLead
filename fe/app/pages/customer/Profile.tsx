@@ -20,6 +20,7 @@ interface ProfileData {
   nic_number: string | null;
   profile_photo_url: string | null;
   is_verified: boolean;
+  verification_status: 'unverified' | 'pending' | 'verified';
   date_of_birth: string | null;
   gender: string | null;
   address_line_1: string | null;
@@ -91,11 +92,60 @@ const Profile = () => {
   };
 
   const handleEditProfile = () => {
-    // Navigate to edit profile screen
-    Alert.alert(
+    // Check if profile data exists
+    if (!profileData) {
+      Alert.alert('Error', 'Unable to edit profile. Please try again later.');
+      return;
+    }
+
+    // Show edit form in an alert
+    Alert.prompt(
       'Edit Profile',
-      'This feature will be implemented soon. You can edit your profile information through the app settings.',
-      [{ text: 'OK' }]
+      'Enter your details',
+      [
+        {
+          text: 'Cancel',
+          style: 'cancel'
+        },
+        {
+          text: 'Save',
+          onPress: async (value) => {
+            try {
+              // Get current user
+              const { data: { user }, error: authError } = await supabase.auth.getUser();
+              if (authError) throw authError;
+
+              // Update profile in database
+              const { error: updateError } = await supabase
+                .from('profiles')
+                .update({
+                  first_name: value,
+                  last_name: profileData.last_name,
+                  nic_number: profileData.nic_number,
+                  phone_number: profileData.phone_number,
+                  address_line_1: profileData.address_line_1,
+                  address_line_2: profileData.address_line_2,
+                  city: profileData.city,
+                  date_of_birth: profileData.date_of_birth,
+                  gender: profileData.gender,
+                  updated_at: new Date().toISOString()
+                })
+                .eq('id', user?.id);
+
+              if (updateError) throw updateError;
+
+              // Refresh profile data
+              fetchUserProfile();
+              Alert.alert('Success', 'Profile updated successfully');
+            } catch (error) {
+              console.error('Error updating profile:', error);
+              Alert.alert('Error', 'Failed to update profile. Please try again.');
+            }
+          }
+        }
+      ],
+      'plain-text',
+      profileData.first_name || ''
     );
   };
 
@@ -201,6 +251,14 @@ const Profile = () => {
       </SafeAreaView>
     );
   }
+
+  const handleVerification = async () => {
+    if (!profileData.first_name || !profileData.last_name || !profileData.nic_number) {
+      Alert.alert('Incomplete Profile', 'Please fill your personal information first');
+      return;
+    }
+    router.push({ pathname: '/pages/customer/CustomerVerification' } as any);
+  };
 
   // Format display name
   const displayName = `${profileData.first_name || ''} ${profileData.last_name || ''}`.trim() || 'No Name Set';
@@ -313,17 +371,37 @@ const Profile = () => {
         {/* Account Information Section */}
         <Text className="text-lg font-bold text-gray-800 mb-3 mt-2">Account Information</Text>
         <PrimaryCard className="mb-4 p-0">
-          <View className="flex-row items-center justify-between p-4 border-b border-gray-200">
-            <View className="flex-row items-center">
-              <Ionicons name="shield-checkmark" size={20} color="#f97316" />
-              <Text className="ml-3 text-base text-gray-700">Verification Status</Text>
+          <View className="p-4 border-b border-gray-200">
+            <View className="flex-row items-center justify-between mb-3">
+              <View className="flex-row items-center">
+                <Ionicons name="shield-checkmark" size={20} color="#f97316" />
+                <Text className="ml-3 text-base text-gray-700">Verification Status</Text>
+              </View>
+              <View className="flex-row items-center">
+                <View className={`w-2 h-2 rounded-full mr-2 ${
+                  profileData.verification_status === 'verified' ? 'bg-green-500' :
+                  profileData.verification_status === 'pending' ? 'bg-yellow-500' :
+                  'bg-red-500'
+                }`} />
+                <Text className={`text-sm font-medium ${
+                  profileData.verification_status === 'verified' ? 'text-green-600' :
+                  profileData.verification_status === 'pending' ? 'text-yellow-600' :
+                  'text-red-600'
+                }`}>
+                  {profileData.verification_status === 'verified' ? 'Verified' :
+                   profileData.verification_status === 'pending' ? 'Pending' :
+                   'Not Verified'}
+                </Text>
+              </View>
             </View>
-            <View className="flex-row items-center">
-              <View className={`w-2 h-2 rounded-full mr-2 ${profileData.is_verified ? 'bg-green-500' : 'bg-yellow-500'}`} />
-              <Text className={`text-sm font-medium ${profileData.is_verified ? 'text-green-600' : 'text-yellow-600'}`}>
-                {profileData.is_verified ? 'Verified' : 'Pending'}
-              </Text>
-            </View>
+            {profileData.verification_status === 'unverified' && (
+              <TouchableOpacity
+                onPress={handleVerification}
+                className="bg-orange-500 py-2 px-4 rounded-lg mt-2"
+              >
+                <Text className="text-white text-center font-semibold">Get Verified</Text>
+              </TouchableOpacity>
+            )}
           </View>
           <View className="flex-row items-center justify-between p-4">
             <View className="flex-row items-center">
